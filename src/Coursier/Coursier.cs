@@ -6,49 +6,65 @@ namespace Coursier
 {
     public sealed class Coursier : ICoursier
     {
-        readonly Dictionary<Guid, Action<Message>>  _subscriptions;
+        readonly Dictionary<Type, List<SubscriptionToken>> _subscriptions;
         readonly object _locker = new object();
 
         public Coursier()
         {
-            _subscriptions = new Dictionary<Guid, Action<Message>>();
+            _subscriptions = new Dictionary<Type, List<SubscriptionToken>>();
         }
 
-        public ISubscriptionToken Subscribe<TMessage>(Action<Message> msgHandler) where TMessage : Message
+        public ISubscriptionToken Subscribe<TMessage>(Action<BaseMessage> msgHandler) where TMessage : BaseMessage
         {
-            var subscriptionKey = Guid.NewGuid();
+            var subscription = new SubscriptionToken(msgHandler);
 
             lock(_locker)
             {
-                _subscriptions.Add(subscriptionKey, msgHandler);
+
+                List<SubscriptionToken> tokensForMessage;
+                if(_subscriptions.TryGetValue(typeof(TMessage), out tokensForMessage))
+                {
+                    tokensForMessage.Add(subscription);
+                }
+                else
+                {
+                    _subscriptions.Add(typeof(TMessage), new List<SubscriptionToken> { subscription });
+                }
             }
 
-            return new SubscriptionToken(subscriptionKey);
+            return subscription;
         }
 
-        public void Publish(Message message)
+        public void Publish<TMessage>(TMessage message) where TMessage : BaseMessage
         {
-            // foreach subscriber registered, call handlers of those interested in this message. 
-            foreach (var h in _subscriptions)
+            lock (_locker)
             {
-                Console.WriteLine(h.Value.Target);
+                List<SubscriptionToken> tokensForMessage;
+                if(!_subscriptions.TryGetValue(typeof(TMessage), out tokensForMessage))
+                    return;
+                
+                foreach (var subscription in tokensForMessage)
+                {
+                    subscription.Handler(message);
+                }
             }
         }
     }
 
     public interface ISubscriptionToken
     {
-
+        Action<BaseMessage> Handler { get; }
     }
 
-    public class SubscriptionToken : ISubscriptionToken
+    internal class SubscriptionToken : ISubscriptionToken
     {
-        readonly Guid _subscriptionKey;
+        public Action<BaseMessage> Handler { get; }
 
-        public SubscriptionToken(Guid subscriptionKey)
+        public SubscriptionToken(Action<BaseMessage> handler)
         {
-            _subscriptionKey = subscriptionKey;
+            Handler = handler;
         }
+
     }
     
 }

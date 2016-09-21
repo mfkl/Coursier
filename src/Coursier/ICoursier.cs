@@ -4,8 +4,7 @@ namespace Coursier
 {
     public interface ICoursier
     {
-        ISubscriptionToken Subscribe<TMessage>(Action<Message> msgHandler) where TMessage : Message;
-
-        void Publish(Message message);
+        void Publish<TMessage>(TMessage message) where TMessage : BaseMessage;
+        ISubscriptionToken Subscribe<TMessage>(Action<BaseMessage> msgHandler) where TMessage : BaseMessage;
     }
 }
