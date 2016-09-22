@@ -1,4 +1,7 @@
-﻿using Xunit;
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Xunit;
 
 namespace Coursier.Test
 {
@@ -10,12 +13,12 @@ namespace Coursier.Test
             var coursier = new Coursier();
             var msgReceived = false;
 
-            coursier.Subscribe<TestMessage>(msg =>
+            coursier.Subscribe<TestMessageOne>(msg =>
             {
                 msgReceived = true;
             });
 
-            coursier.Publish(new TestMessage(this));
+            coursier.Publish(new TestMessageOne(this));
 
             Assert.True(msgReceived);
         }
@@ -26,16 +29,116 @@ namespace Coursier.Test
             var coursier = new Coursier();
             var msgReceived = false;
 
-            var token = coursier.Subscribe<TestMessage>(msg =>
+            var token = coursier.Subscribe<TestMessageOne>(msg =>
             {
                 msgReceived = true;
             });
 
-            coursier.UnSubscribe<TestMessage>(token);
+            coursier.Unsubscribe<TestMessageOne>(token);
 
-            coursier.Publish(new TestMessage(this));
+            coursier.Publish(new TestMessageOne(this));
 
             Assert.False(msgReceived);
+        }
+
+        [Fact]
+        public void ShouldKeepCountOfSubscriptions()
+        {
+            var coursier = new Coursier();
+
+            var subOne = coursier.Subscribe<TestMessageOne>(msg => { });
+            coursier.Subscribe<TestMessageOne>(msg => { });
+
+            Assert.Equal(2, coursier.SubscriptionCount<TestMessageOne>());
+
+            coursier.Unsubscribe<TestMessageOne>(subOne);
+
+            Assert.Equal(1, coursier.SubscriptionCount<TestMessageOne>());
+        }
+
+        [Fact]
+        public void ShouldClearSubscriptionsForGivenMessage()
+        {
+            var coursier = new Coursier();
+            MakeABunchOfSubscriptions(coursier);
+
+            coursier.ClearSubscriptionsFor<TestMessageTwo>();
+
+            Assert.Equal(3, coursier.SubscriptionCount<TestMessageOne>());
+            Assert.Equal(0, coursier.SubscriptionCount<TestMessageTwo>());
+        }
+
+        static void MakeABunchOfSubscriptions(ICoursier coursier)
+        {
+            coursier.Subscribe<TestMessageOne>(msg => { });
+            coursier.Subscribe<TestMessageOne>(msg => { });
+            coursier.Subscribe<TestMessageOne>(msg => { });
+
+            coursier.Subscribe<TestMessageTwo>(msg => { });
+            coursier.Subscribe<TestMessageTwo>(msg => { });
+        }
+
+        [Fact]
+        public void ShouldRegisterAndInvokeAsyncHandler()
+        {
+            var coursier = new Coursier();
+            var msgReceived = false;
+
+            coursier.Subscribe<TestMessageOne>(async msg =>
+            {
+                await Task.Run(() =>
+                {
+                    msgReceived = true;
+                });
+            });
+
+            coursier.Publish(new TestMessageOne(this));
+
+            Thread.Sleep(1000);
+
+            Assert.True(msgReceived);
+        }
+
+        [Fact]
+        public void ShouldClearAllSubscriptions()
+        {
+            var coursier = new Coursier();
+
+            var msgOneReceived = false;
+            var msgTwoReceived = false;
+
+            coursier.Subscribe<TestMessageOne>(msg => { msgOneReceived = true; });
+            coursier.Subscribe<TestMessageTwo>(msg => { msgTwoReceived = true; });
+
+            coursier.ClearAllSubscriptions();
+
+            coursier.Publish(new TestMessageOne(this));
+            coursier.Publish(new TestMessageTwo(this));
+
+            Assert.False(msgOneReceived);
+            Assert.False(msgTwoReceived);
+        }
+
+        [Fact]
+        public void ShouldThrowIfMessageIsNull()
+        {
+            var coursier = new Coursier();
+
+            Assert.Throws<NullReferenceException>(() => coursier.Publish<TestMessageOne>(null));
+        }
+
+        [Fact]
+        public void ShouldThrowIfMessageSenderIsNull()
+        {
+            Assert.Throws<NullReferenceException>(() => new TestMessageOne(null));
+        }
+
+        [Fact]
+        public void ShouldThrowIfSubscribingToBaseMessage()
+        {
+            var coursier = new Coursier();
+
+            Assert.Throws<InvalidOperationException>(() => coursier.Subscribe<BaseMessage>(msg => { }));
         }
     }
 }
