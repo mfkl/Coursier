@@ -4,7 +4,7 @@ namespace Coursier
 {
     public interface ISubscriptionToken
     {
-        Action<BaseMessage> Handler { get; }
+        Type MessageType { get; }
         Guid Id { get; }
     }
 }

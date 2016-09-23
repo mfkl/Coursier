@@ -6,12 +6,12 @@ namespace Coursier
 {
     public sealed class Coursier : ICoursier
     {
-        readonly Dictionary<Type, List<ISubscriptionToken>> _subscriptions;
+        readonly Dictionary<Type, Dictionary<Guid, HandlerWrapper>> _subscriptions;
         readonly object _locker = new object();
 
         public Coursier()
         {
-            _subscriptions = new Dictionary<Type, List<ISubscriptionToken>>();
+            _subscriptions = new Dictionary<Type, Dictionary<Guid, HandlerWrapper>>();
         }
 
         public ISubscriptionToken Subscribe<TMessage>(Action<BaseMessage> msgHandler) where TMessage : BaseMessage
@@ -19,7 +19,13 @@ namespace Coursier
             if(typeof(TMessage) == typeof(BaseMessage))
                 throw new InvalidOperationException(nameof(BaseMessage) + " cannot be used as a message type.");
 
-            var subscription = new SubscriptionToken(msgHandler);
+            return SubscribeInternal<TMessage>(msgHandler);
+        }
+
+        ISubscriptionToken SubscribeInternal<TMessage>(Action<BaseMessage> msgHandler, bool runOnThreadPoolThread = false)
+            where TMessage : BaseMessage
+        {
+            var subscription = new SubscriptionToken(typeof(TMessage));
 
             lock(_locker)
             {
@@ -27,11 +33,14 @@ namespace Coursier
 
                 if(subscriptions.Count > 0)
                 {
-                    subscriptions.Add(subscription);
+                    subscriptions.Add(subscription.Id, new HandlerWrapper(msgHandler, runOnThreadPoolThread));
                 }
                 else
                 {
-                    _subscriptions.Add(typeof(TMessage), new List<ISubscriptionToken> { subscription });
+                    _subscriptions.Add(typeof(TMessage), new Dictionary<Guid, HandlerWrapper>
+                    {
+                        { subscription.Id, new HandlerWrapper(msgHandler, runOnThreadPoolThread) }
+                    });
                 }
             }
 
@@ -40,7 +49,10 @@ namespace Coursier
 
         public ISubscriptionToken SubscribeOnThreadPoolThread<TMessage>(Action<BaseMessage> msgHandler) where TMessage : BaseMessage
         {
-            throw new NotImplementedException();
+            if(typeof(TMessage) == typeof(BaseMessage))
+                throw new InvalidOperationException(nameof(BaseMessage) + " cannot be used as a message type.");
+
+            return SubscribeInternal<TMessage>(msgHandler, true);
         }
 
         public void Unsubscribe<TMessage>(ISubscriptionToken token) where TMessage : BaseMessage
@@ -48,7 +60,7 @@ namespace Coursier
             lock(_locker)
             { 
                 var subscriptions = GetSubscriptionsFor<TMessage>();
-                subscriptions.Remove(token);
+                subscriptions.Remove(token.Id);
             }
         }
 
@@ -61,9 +73,9 @@ namespace Coursier
             {
                 var subscriptions = GetSubscriptionsFor<TMessage>();
 
-                foreach (var subscription in subscriptions)
+                foreach (var handler in subscriptions)
                 {
-                    subscription.Handler(message);
+                    handler.Value.Invoke(message);
                 }
             }
         }
@@ -94,14 +106,15 @@ namespace Coursier
             }
         }
 
-        List<ISubscriptionToken> GetSubscriptionsFor<TMessage>() where TMessage : BaseMessage
+        Dictionary<Guid, HandlerWrapper> GetSubscriptionsFor<TMessage>() where TMessage : BaseMessage
         {
             lock(_locker)
             {
-                List<ISubscriptionToken> tokensForMessage;
-                return _subscriptions.TryGetValue(typeof(TMessage), out tokensForMessage) ?
-                    tokensForMessage :
-                    Enumerable.Empty<ISubscriptionToken>().ToList();
+                Dictionary<Guid, HandlerWrapper> handlers;
+                return _subscriptions.TryGetValue(typeof(TMessage), out handlers)
+                    ? handlers
+                    : Enumerable.Empty<KeyValuePair<Guid, HandlerWrapper>>() // not cool
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             }
         }
     }

@@ -140,5 +140,31 @@ namespace Coursier.Test
 
             Assert.Throws<InvalidOperationException>(() => coursier.Subscribe<BaseMessage>(msg => { }));
         }
+
+        [Fact]
+        public void ShouldRunOnThreadPoolThread()
+        {
+            var coursier = new Coursier();
+
+            coursier.SubscribeOnThreadPoolThread<TestMessageOne>(msg =>
+            {
+                Assert.True(Thread.CurrentThread.IsBackground);
+            });
+
+            coursier.Publish(new TestMessageOne(this));
+        }
+
+        [Fact]
+        public void ShouldNotRunOnThreadPoolThread()
+        {
+            var coursier = new Coursier();
+
+            coursier.SubscribeOnThreadPoolThread<TestMessageOne>(msg =>
+            {
+                Assert.False(Thread.CurrentThread.IsBackground);
+            });
+
+            coursier.Publish(new TestMessageOne(this));
+        }
     }
 }

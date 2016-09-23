@@ -4,11 +4,11 @@ namespace Coursier
 {
     internal class SubscriptionToken : ISubscriptionToken
     {
-        public Action<BaseMessage> Handler { get; }
+        public Type MessageType { get; }
         public Guid Id { get; }
-        public SubscriptionToken(Action<BaseMessage> handler)
+        public SubscriptionToken(Type messageType)
         {
-            Handler = handler;
+            MessageType = messageType;
             Id = Guid.NewGuid();
         }
     }
