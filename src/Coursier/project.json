@@ -1,13 +1,25 @@
 ﻿{
-  "version": "1.0.0-*",
+    "name": "Coursier",
+    "description": "Simple in-process pub/sub",
+    "version": "1.0.0-*",
+    "authors": [ "mfkl" ],
+
+    "packOptions": {
+        "owners": [ "mfkl" ],
+        "repository": {
+            "type": "git",
+            "url": "https://github.com/mfkl/Coursier/"
+        }
+    },
 
     "dependencies": {
         "NETStandard.Library": "1.6.0"
     },
 
-  "frameworks": {
-    "netstandard1.6": {
-      "imports": "dnxcore50"
+    "frameworks": {
+        "netstandard1.6": {
+            "imports": "dnxcore50"
+        }
     }
-  }
 }
+
